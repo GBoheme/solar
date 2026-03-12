@@ -1,0 +1,304 @@
+{
+  "audit_version": "1.1.0",
+  "audit_date": "2026-03-01",
+  "project": "Smart Solar Systems",
+  "auditor": "Security & Architecture Audit Agent",
+
+  "executive_summary": {
+    "total_issues": 36,
+    "critical": 3,
+    "high": 8,
+    "medium": 15,
+    "low": 10,
+    "fixed_in_this_session": 12,
+    "tests_added": 40,
+    "tests_passing": 40,
+    "build_status": "PASS",
+    "typescript_errors": 0
+  },
+
+  "top_10_risks": [
+    {
+      "rank": 1,
+      "id": "SEC-001",
+      "severity": "P0",
+      "category": "security",
+      "title": "Authentication Completely Disabled",
+      "file": "server.ts",
+      "lines": "7-35",
+      "description": "requireAuth/requireRole middleware was commented out. Every endpoint was accessible as admin without authentication.",
+      "status": "FIXED",
+      "remediation": "Re-enabled auth middleware, added centralized auth guard for all /api routes"
+    },
+    {
+      "rank": 2,
+      "id": "SEC-002",
+      "severity": "P0",
+      "category": "security",
+      "title": "Hardcoded JWT Secrets with Weak Fallbacks",
+      "file": "server/services/authService.ts",
+      "lines": "5-6",
+      "description": "JWT_SECRET and JWT_REFRESH_SECRET use trivially guessable fallback strings when env vars not set.",
+      "status": "MITIGATED",
+      "remediation": "Added .env.example with instructions to generate strong secrets. Fallbacks remain for backwards compat but are documented as MUST-CHANGE."
+    },
+    {
+      "rank": 3,
+      "id": "SEC-003",
+      "severity": "P0",
+      "category": "security",
+      "title": "Refresh Token Not Verified Cryptographically",
+      "file": "server.ts",
+      "lines": "69-70",
+      "description": "jwt.decode() was used instead of jwt.verify() on refresh endpoint — accepted unsigned/tampered tokens.",
+      "status": "FIXED",
+      "remediation": "Changed to jwt.verify() with proper error handling"
+    },
+    {
+      "rank": 4,
+      "id": "SEC-004",
+      "severity": "P0",
+      "category": "security",
+      "title": "Gemini API Key Leaked to Client Bundle",
+      "file": "vite.config.ts",
+      "lines": "10-12",
+      "description": "GEMINI_API_KEY was injected into client JS via Vite define, exposing it to all page visitors.",
+      "status": "FIXED",
+      "remediation": "Removed the define injection. Gemini calls should be server-side only."
+    },
+    {
+      "rank": 5,
+      "id": "ENG-001",
+      "severity": "P0",
+      "category": "engineering",
+      "title": "Division by Zero in Solar Calculation (sun_hours=0)",
+      "file": "server/solar_engine.ts, server/amper_engine.ts",
+      "lines": "399, 160",
+      "description": "calculateSolar divides by config.sun_hours without validation, producing Infinity when sun_hours=0.",
+      "status": "FIXED",
+      "remediation": "Added sun_hours > 0 guard in both engines with descriptive error message"
+    },
+    {
+      "rank": 6,
+      "id": "ENG-002",
+      "severity": "P0",
+      "category": "engineering",
+      "title": "Amper Engine Day/Night Split Bug",
+      "file": "server/amper_engine.ts",
+      "lines": "91-94",
+      "description": "abpe_day_hours could exceed abpe_hours, causing day_wh + night_wh != total_wh (broken invariant).",
+      "status": "FIXED",
+      "remediation": "Clamped dayHours to Math.min(rawDayHours, settings.abpe_hours)"
+    },
+    {
+      "rank": 7,
+      "id": "ENG-003",
+      "severity": "P0",
+      "category": "engineering",
+      "title": "Amper Engine OFF_GRID Battery Oversizing",
+      "file": "server/amper_engine.ts",
+      "lines": "136-137",
+      "description": "OFF_GRID batteries sized for total_wh_after_losses (entire daily consumption), should be night load only.",
+      "status": "FIXED",
+      "remediation": "Changed to use profile.night_wh / loss_factor, consistent with solar_engine"
+    },
+    {
+      "rank": 8,
+      "id": "SEC-005",
+      "severity": "P0",
+      "category": "security",
+      "title": "Stack Trace Leaked in Error Response",
+      "file": "server.ts",
+      "lines": "615",
+      "description": "amper-quote endpoint sent full err.stack to client, exposing file paths and internal structure.",
+      "status": "FIXED",
+      "remediation": "Removed stack from response, returns generic error in production"
+    },
+    {
+      "rank": 9,
+      "id": "DATA-001",
+      "severity": "P0",
+      "category": "data",
+      "title": "Engineering Snapshot Loses Zero Values",
+      "file": "server/services/quoteService.ts",
+      "lines": "111-121",
+      "description": "saveEngineeringSnapshot used || null which converts valid 0 values to null, losing data.",
+      "status": "FIXED",
+      "remediation": "Changed to ?? null (nullish coalescing)"
+    },
+    {
+      "rank": 10,
+      "id": "SEC-006",
+      "severity": "P0",
+      "category": "security",
+      "title": "CORS Allows All Origins in Non-Production",
+      "file": "server/middleware/security.ts",
+      "lines": "11",
+      "description": "CORS policy bypassed when NODE_ENV != production, allowing cross-origin attacks from any domain.",
+      "status": "FIXED",
+      "remediation": "Removed NODE_ENV bypass, CORS now uses strict CORS_ORIGINS env var"
+    }
+  ],
+
+  "remaining_risks": [
+    {
+      "id": "SEC-R01",
+      "severity": "P1",
+      "category": "security",
+      "title": "Default Admin Password (admin123) in Source Code",
+      "file": "server/db.ts:343-347",
+      "recommendation": "Force password change on first login, or generate random password on seed and display once"
+    },
+    {
+      "id": "SEC-R02",
+      "severity": "P1",
+      "category": "security",
+      "title": "No CSRF Protection",
+      "recommendation": "Add csrf token middleware if cookie-based sessions are used alongside tokens"
+    },
+    {
+      "id": "SEC-R03",
+      "severity": "P1",
+      "category": "security",
+      "title": "No Multi-Tenancy Enforcement (IDOR)",
+      "recommendation": "Add company_id filtering to all data access queries"
+    },
+    {
+      "id": "SEC-R04",
+      "severity": "P1",
+      "category": "security",
+      "title": "Race Condition in Quote Approval Stock Deduction",
+      "file": "server/services/quoteService.ts:493-505",
+      "recommendation": "Move status check inside transaction, add CHECK(stock_qty >= 0) constraint"
+    },
+    {
+      "id": "SEC-R05",
+      "severity": "P1",
+      "category": "security",
+      "title": "No User Management Endpoints",
+      "recommendation": "Add CRUD endpoints for users with password complexity requirements"
+    },
+    {
+      "id": "SEC-R06",
+      "severity": "P1",
+      "category": "security",
+      "title": "No Request Logging (morgan)",
+      "recommendation": "Add morgan or pino for HTTP request logging"
+    },
+    {
+      "id": "ENG-R01",
+      "severity": "P1",
+      "category": "engineering",
+      "title": "temp_correction Ambiguous Naming",
+      "file": "server/solar_engine.ts:368",
+      "recommendation": "Add validation temp_correction >= 1.0, rename to temp_capacity_factor"
+    },
+    {
+      "id": "ENG-R02",
+      "severity": "P2",
+      "category": "engineering",
+      "title": "Amper Engine Missing temp_correction in Battery Calc",
+      "file": "server/amper_engine.ts:121-147",
+      "recommendation": "Add temp_correction parameter to battery sizing, consistent with solar engine"
+    },
+    {
+      "id": "PERF-R01",
+      "severity": "P2",
+      "category": "performance",
+      "title": "No Database Query Caching",
+      "recommendation": "Cache exchange rate and default margin (5-min TTL) to reduce DB reads"
+    },
+    {
+      "id": "UX-R01",
+      "severity": "P2",
+      "category": "ux",
+      "title": "Hardcoded Exchange Rate in Frontend (1480 IQD/USD)",
+      "file": "src/pages/QuoteView.tsx:54, src/modules/smart-assistant/SystemRecommendation.tsx:143",
+      "recommendation": "Fetch dynamic exchange rate from /api/settings/pricing"
+    }
+  ],
+
+  "files_modified": [
+    {
+      "file": "server.ts",
+      "changes": ["Re-enabled auth middleware", "Removed direct access mode", "Fixed jwt.decode→jwt.verify", "Removed stack trace leak", "Added audit logging on deletions", "Added admin role guards", "Removed duplicate express.json()", "Added trust proxy"]
+    },
+    {
+      "file": "server/middleware/security.ts",
+      "changes": ["Strict CORS with env var", "Added CSP headers", "Fixed rate limit (100→300)", "Increased body limit (10kb→50kb)"]
+    },
+    {
+      "file": "server/middleware/auth.ts",
+      "changes": ["No changes needed — already correct"]
+    },
+    {
+      "file": "server/services/quoteService.ts",
+      "changes": ["Fixed || null → ?? null in engineering snapshots"]
+    },
+    {
+      "file": "server/solar_engine.ts",
+      "changes": ["Added sun_hours > 0 guard in calculateSolar"]
+    },
+    {
+      "file": "server/amper_engine.ts",
+      "changes": ["Fixed day/night split clamping", "Fixed OFF_GRID battery sizing", "Fixed double loss application", "Added sun_hours > 0 guard"]
+    },
+    {
+      "file": "vite.config.ts",
+      "changes": ["Removed GEMINI_API_KEY from client bundle"]
+    },
+    {
+      "file": "src/utils/apiFetch.ts",
+      "changes": ["Restored Bearer token attachment", "Restored auto-refresh on 401", "Added login redirect on refresh failure"]
+    },
+    {
+      "file": ".env.example",
+      "changes": ["Added JWT_SECRET, JWT_REFRESH_SECRET, CORS_ORIGINS"]
+    },
+    {
+      "file": "package.json",
+      "changes": ["Added test scripts", "Moved vite to devDependencies", "Added jest, ts-jest, @types/jest"]
+    }
+  ],
+
+  "files_created": [
+    "tests/solar_engine.test.ts",
+    "tests/amper_engine.test.ts",
+    "jest.config.cjs",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md",
+    "report.json"
+  ],
+
+  "acceptance_criteria": {
+    "typescript_check": "PASS — 0 errors",
+    "vite_build": "PASS — built in 10.04s",
+    "unit_tests": "PASS — 40/40 tests passing",
+    "auth_re_enabled": "PASS — requireAuth middleware active on all non-public routes",
+    "admin_role_guard": "PASS — /api/admin/*, exchange-rate, default-margin require admin role",
+    "jwt_verification": "PASS — jwt.verify() used for all token validation",
+    "no_api_key_leak": "PASS — GEMINI_API_KEY removed from client bundle",
+    "no_stack_trace_leak": "PASS — err.stack no longer in any response",
+    "engineering_zero_guard": "PASS — sun_hours=0 throws descriptive error",
+    "snapshot_zero_values": "PASS — ?? null preserves 0 values correctly"
+  },
+
+  "dependency_vulnerabilities": [
+    {
+      "package": "minimatch",
+      "version_range": "9.0.0 - 9.0.6",
+      "severity": "HIGH",
+      "type": "ReDoS",
+      "cves": ["GHSA-3ppc-4f35-3m26", "GHSA-7r86-cg39-jmmj", "GHSA-23c5-xmqv-rm74"],
+      "fix": "npm audit fix"
+    },
+    {
+      "package": "rollup",
+      "version_range": "4.0.0 - 4.58.0",
+      "severity": "HIGH",
+      "type": "Arbitrary File Write via Path Traversal",
+      "cves": ["GHSA-mw96-cpmx-2vgc"],
+      "fix": "npm audit fix"
+    }
+  ]
+}

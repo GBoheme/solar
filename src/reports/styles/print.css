@@ -1,0 +1,191 @@
+/*
+ * Professional Print Stylesheet for Smart Solar Systems
+ * Imported via index.css — complements Tailwind print: utilities.
+ *
+ * Design tokens:
+ *   Page      : A4 portrait, 15mm/12mm margins
+ *   Font base : 10pt Noto Kufi Arabic
+ *   Table     : thead repeats across pages, rows avoid page-break
+ *   Colors    : print-safe (no translucent backgrounds)
+ */
+
+/* ────────── @page ────────── */
+@page {
+  size: A4 portrait;
+  margin: 15mm 12mm 20mm 12mm;
+}
+
+/* ────────── Global print overrides ────────── */
+@media print {
+  /* Reset body */
+  html, body {
+    width: 210mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 10pt !important;
+    line-height: 1.5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Kill dark-mode transition during print */
+  * {
+    transition: none !important;
+  }
+
+  /* Remove all box-shadows */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* ── Layout shell ── */
+  /* Hide sidebar, breadcrumbs, mobile header */
+  aside,
+  nav,
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Let main content fill the page */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    min-height: auto !important;
+  }
+
+  /* ── Typography ── */
+  h1 { font-size: 18pt !important; }
+  h2 { font-size: 14pt !important; }
+  h3 { font-size: 12pt !important; }
+  h4 { font-size: 10pt !important; }
+
+  /* ── Tables ── */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  th, td {
+    padding: 6px 10px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  /* ── Page break utilities ── */
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* ── Report-specific ── */
+
+  /* Report root: show only the report wrapper */
+  .report-print-root {
+    display: block !important;
+    position: static !important;
+  }
+
+  /* A4 page container within reports */
+  .report-page {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    page-break-after: always !important;
+    background: #fff !important;
+    position: relative !important;
+  }
+
+  .report-page:last-child {
+    page-break-after: avoid !important;
+  }
+
+  /* Report header stripe — force background */
+  .report-header-bg {
+    background-color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Report accent bar */
+  .report-accent-bar {
+    background-color: #f59e0b !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Report footer */
+  .report-footer-bg {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Signature block — preserve minimum height */
+  .report-signature-block {
+    min-height: 60px !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force section backgrounds */
+  .report-section-bg {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Table header background */
+  .report-table-header {
+    background-color: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide interactive elements */
+  button,
+  input,
+  select,
+  textarea,
+  .interactive-only {
+    display: none !important;
+  }
+
+  /* But show report inputs that are display elements */
+  .report-display-value {
+    display: inline !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Links: show as plain text */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}

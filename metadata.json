@@ -1,0 +1,5 @@
+{
+  "name": "Smart Solar Systems",
+  "description": "Internal web application for managing solar projects, engineering calculations, inventory, and quotations.",
+  "requestFramePermissions": []
+}
