@@ -1,0 +1,455 @@
+// نظام تدقيق وإدارة معاملات النقل اللوجستي
+// قاعدة البيانات: SQLite افتراضياً للتشغيل الفوري.
+// للتحويل إلى PostgreSQL: غيّر provider إلى "postgresql" وعدّل DATABASE_URL في .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ المستخدمون والصلاحيات ============
+// role: ADMIN | DATA_ENTRY | REVIEWER | VIEWER
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  password_hash String
+  role          String   @default("VIEWER")
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+
+  transactions_created  Transaction[]          @relation("creator")
+  transactions_reviewed Transaction[]          @relation("reviewer")
+  audit_logs            AuditLog[]
+  checklist_checks      TransactionChecklist[]
+  generated_documents   GeneratedDocument[]
+  error_entries         ErrorRegister[]
+}
+
+// ============ أنواع المعاملات ============
+model TransactionType {
+  id                       Int     @id @default(autoincrement())
+  code                     String  @unique
+  name                     String
+  default_subject          String
+  description              String?
+  requires_route           Boolean @default(false)
+  requires_drivers         Boolean @default(false)
+  requires_contract        Boolean @default(false)
+  requires_tax_letter      Boolean @default(false)
+  requires_cut_forms       Boolean @default(false)
+  requires_previous_book   Boolean @default(false)
+  required_attachment_types String? // JSON: ["CONTRACT","TAX_LETTER",...]
+  default_template_id      Int?
+  is_active                Boolean @default(true)
+
+  transactions    Transaction[]
+  templates       Template[]
+  checklist_items ChecklistItem[]
+}
+
+// ============ الجهات الرسمية ============
+model Department {
+  id            Int     @id @default(autoincrement())
+  short_name    String
+  official_name String
+  branch        String?
+  section       String?
+  governorate   String?
+  type          String? // وزارة | شركة حكومية | فرع | دائرة | أخرى
+  notes         String?
+  is_active     Boolean @default(true)
+
+  transactions_target  Transaction[] @relation("target_department")
+  transactions_related Transaction[] @relation("related_department")
+  tax_letters          TaxLetter[]
+  contracts            Contract[]
+}
+
+// ============ الشركات ============
+model Company {
+  id             Int     @id @default(autoincrement())
+  official_name  String
+  short_name     String?
+  activity_type  String?
+  representative String?
+  notes          String?
+  is_active      Boolean @default(true)
+
+  contracts    Contract[]
+  tax_letters  TaxLetter[]
+  cut_forms    CutForm[]
+  transactions Transaction[]
+}
+
+// ============ العقود ============
+model Contract {
+  id                Int       @id @default(autoincrement())
+  contract_number   String
+  contract_date     DateTime?
+  company_id        Int
+  contracting_department_id Int?
+  product           String?
+  total_quantity    Float?
+  duration          String?
+  file_url          String?
+  notes             String?
+  is_active         Boolean   @default(true)
+
+  company                Department? @relation(fields: [contracting_department_id], references: [id])
+  company_rel            Company     @relation(fields: [company_id], references: [id])
+  tax_letters            TaxLetter[]
+  cut_forms              CutForm[]
+  transactions           Transaction[]
+}
+
+// ============ كتب الضريبة ============
+model TaxLetter {
+  id                Int       @id @default(autoincrement())
+  tax_letter_number String
+  tax_letter_date   DateTime?
+  issuing_department_id Int?
+  company_id        Int
+  contract_id       Int?
+  allowed_quantity  Float?
+  product           String?
+  file_url          String?
+  notes             String?
+
+  issuing_department Department? @relation(fields: [issuing_department_id], references: [id])
+  company            Company     @relation(fields: [company_id], references: [id])
+  contract           Contract?   @relation(fields: [contract_id], references: [id])
+  cut_forms          CutForm[]
+  transactions       Transaction[]
+}
+
+// ============ مصادر التجهيز ============
+model LoadingSource {
+  id            Int     @id @default(autoincrement())
+  name          String
+  official_name String?
+  governorate   String?
+  is_active     Boolean @default(true)
+
+  cut_forms      CutForm[]
+  routes         Route[]
+  operation_logs OperationLog[]
+}
+
+// ============ المسارات ============
+model Route {
+  id                   Int     @id @default(autoincrement())
+  code                 String  @unique
+  from_location        String
+  to_location          String
+  official_description String
+  checkpoints          String?
+  governorate          String?
+  product              String?
+  loading_source_id    Int? // مصدر التجهيز المطابق لبداية المسار
+  is_active            Boolean @default(true)
+  notes                String?
+
+  loading_source     LoadingSource?     @relation(fields: [loading_source_id], references: [id])
+  cut_forms          CutForm[]
+  transaction_routes TransactionRoute[]
+}
+
+// ============ المعاملات ============
+// status: DRAFT | MISSING_DATA | MISSING_ATTACHMENTS | AWAITING_REVIEW | REVIEWED |
+//         READY_TO_ISSUE | ISSUED_WORD | ISSUED_PDF | SENT | ARCHIVED | RETURNED_FOR_CORRECTION | CANCELLED
+// priority: LOW | NORMAL | HIGH | URGENT
+model Transaction {
+  id                    Int       @id @default(autoincrement())
+  internal_number       String    @unique
+  transaction_type_id   Int
+  subject               String?
+  subject_confirmed     Boolean   @default(false) // تأكيد العنوان المخصص
+  target_department_id  Int?
+  related_department_id Int?
+  company_id            Int?
+  contract_id           Int?
+  tax_letter_id         Int?
+  product               String?
+  book_number           String? // رقم الكتاب الصادر
+  book_date             DateTime?
+  previous_book_number  String?
+  previous_book_date    DateTime?
+  mentioned_vehicle_count Int? // العدد المذكور في وصف المعاملة (للمطابقة مع الجدول)
+  requested_quantity    Float? // الكمية المطلوبة (تقارن بالمسموح في كتاب الضريبة)
+  final_request         String? // الطلب الختامي في الكتاب
+  status                String    @default("DRAFT")
+  priority              String    @default("NORMAL")
+  deadline              DateTime?
+  notes                 String?
+  correction_of_id      Int? // نسخة تصحيحية من معاملة
+  created_by            Int
+  reviewed_by           Int?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  transaction_type   TransactionType @relation(fields: [transaction_type_id], references: [id])
+  target_department  Department?     @relation("target_department", fields: [target_department_id], references: [id])
+  related_department Department?     @relation("related_department", fields: [related_department_id], references: [id])
+  company            Company?        @relation(fields: [company_id], references: [id])
+  contract           Contract?       @relation(fields: [contract_id], references: [id])
+  tax_letter         TaxLetter?      @relation(fields: [tax_letter_id], references: [id])
+  creator            User            @relation("creator", fields: [created_by], references: [id])
+  reviewer           User?           @relation("reviewer", fields: [reviewed_by], references: [id])
+  correction_of      Transaction?    @relation("corrections", fields: [correction_of_id], references: [id])
+  corrections        Transaction[]   @relation("corrections")
+
+  routes              TransactionRoute[]
+  drivers             Driver[]
+  cut_forms           CutForm[]
+  operation_logs      OperationLog[]
+  attachments         Attachment[]
+  checklist           TransactionChecklist[]
+  validation_errors   ValidationError[]
+  audit_logs          AuditLog[]
+  generated_documents GeneratedDocument[]
+  error_entries       ErrorRegister[]
+
+  @@index([status])
+  @@index([transaction_type_id])
+  @@index([created_at])
+}
+
+// ربط المعاملة بالمسارات (يمكن أكثر من مسار)
+model TransactionRoute {
+  id             Int @id @default(autoincrement())
+  transaction_id Int
+  route_id       Int
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  route       Route       @relation(fields: [route_id], references: [id])
+
+  @@unique([transaction_id, route_id])
+}
+
+// ============ استمارات القطع ============
+// status: OPEN | PARTIALLY_LOADED | CLOSED | EXPIRED
+model CutForm {
+  id                 Int       @id @default(autoincrement())
+  transaction_id     Int?
+  form_number        String
+  form_date          DateTime?
+  loading_source_id  Int?
+  loading_site       String?
+  product            String?
+  cut_quantity       Float?
+  loaded_quantity    Float?    @default(0)
+  remaining_quantity Float?
+  company_id         Int?
+  contract_id        Int?
+  tax_letter_id      Int?
+  route_id           Int?
+  status             String    @default("OPEN")
+  file_url           String?
+  notes              String?
+  created_at         DateTime  @default(now())
+
+  transaction    Transaction?   @relation(fields: [transaction_id], references: [id])
+  loading_source LoadingSource? @relation(fields: [loading_source_id], references: [id])
+  company        Company?       @relation(fields: [company_id], references: [id])
+  contract       Contract?      @relation(fields: [contract_id], references: [id])
+  tax_letter     TaxLetter?     @relation(fields: [tax_letter_id], references: [id])
+  route          Route?         @relation(fields: [route_id], references: [id])
+  operation_logs OperationLog[]
+
+  @@index([form_number])
+  @@index([status])
+}
+
+// ============ السائقون والمركبات ============
+model Driver {
+  id             Int     @id @default(autoincrement())
+  transaction_id Int
+  sequence_no    Int
+  driver_name    String
+  vehicle_number String
+  governorate    String?
+  vehicle_type   String?
+  tanker_number  String?
+  gps_info       String?
+  notes          String?
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([vehicle_number])
+  @@index([transaction_id, sequence_no])
+}
+
+// ============ سجل الاشتغال والكشف ============
+model OperationLog {
+  id                 Int       @id @default(autoincrement())
+  transaction_id     Int?
+  log_number         String
+  log_date           DateTime?
+  station            String?
+  quantity           Float?
+  loading_source_id  Int?
+  responsible_name   String?
+  has_signatures     Boolean   @default(false)
+  notes              String?
+  linked_cut_form_id Int?
+  file_url           String?
+  created_at         DateTime  @default(now())
+
+  transaction     Transaction?   @relation(fields: [transaction_id], references: [id])
+  loading_source  LoadingSource? @relation(fields: [loading_source_id], references: [id])
+  linked_cut_form CutForm?       @relation(fields: [linked_cut_form_id], references: [id])
+}
+
+// ============ المرفقات ============
+// attachment_type: CONTRACT | TAX_LETTER | TRANSFER_BOOK | VEHICLES_TABLE | DRIVERS_TABLE |
+//                  CUT_FORM | OPERATION_LOG | LICENSE | PREVIOUS_BOOK | PHOTOS | CD_EXCEL | OTHER
+model Attachment {
+  id              Int       @id @default(autoincrement())
+  transaction_id  Int
+  attachment_type String
+  title           String
+  document_number String?
+  document_date   DateTime?
+  file_url        String?
+  is_required     Boolean   @default(false)
+  is_verified     Boolean   @default(false)
+  notes           String?
+  created_at      DateTime  @default(now())
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+}
+
+// ============ قوالب Word ============
+model Template {
+  id                  Int     @id @default(autoincrement())
+  name                String
+  transaction_type_id Int?
+  file_url            String
+  placeholders_json   String?
+  is_active           Boolean @default(true)
+  version             Int     @default(1)
+
+  transaction_type    TransactionType?    @relation(fields: [transaction_type_id], references: [id])
+  generated_documents GeneratedDocument[]
+}
+
+// ============ بنود قوائم التدقيق حسب النوع ============
+// severity: CRITICAL | WARNING | INFO
+model ChecklistItem {
+  id                  Int     @id @default(autoincrement())
+  transaction_type_id Int
+  title               String
+  description         String?
+  is_required         Boolean @default(true)
+  severity            String  @default("CRITICAL")
+  sort_order          Int     @default(0)
+  condition_key       String? // بند شرطي: يظهر فقط عند توفر الشرط (مثال: has_tax_letter)
+
+  transaction_type TransactionType        @relation(fields: [transaction_type_id], references: [id])
+  checks           TransactionChecklist[]
+}
+
+model TransactionChecklist {
+  id                Int       @id @default(autoincrement())
+  transaction_id    Int
+  checklist_item_id Int
+  is_done           Boolean   @default(false)
+  checked_by        Int?
+  checked_at        DateTime?
+  notes             String?
+
+  transaction    Transaction   @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  checklist_item ChecklistItem @relation(fields: [checklist_item_id], references: [id])
+  checker        User?         @relation(fields: [checked_by], references: [id])
+
+  @@unique([transaction_id, checklist_item_id])
+}
+
+// ============ أخطاء التحقق ============
+// severity: CRITICAL | WARNING
+model ValidationError {
+  id              Int      @id @default(autoincrement())
+  transaction_id  Int
+  field_name      String
+  error_type      String
+  message         String
+  severity        String   @default("CRITICAL")
+  fingerprint     String? // بصمة دقيقة: نوع الخطأ + الحقل + مرجع الكيان — التجاوز يرتبط بها حصراً
+  is_resolved     Boolean  @default(false)
+  override_reason String? // سبب تجاوز التحذير
+  overridden_by   Int?
+  created_at      DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([transaction_id, fingerprint])
+}
+
+// ============ إعدادات التطبيق (سجل واحد) ============
+model AppSetting {
+  id             Int      @id @default(1)
+  app_name       String   @default("نظام غيث للسيطرة اللوجستية")
+  app_name_en    String   @default("Ghaith Logistics Control System")
+  owner_name     String   @default("Ghaith Boheme")
+  logo_url       String?
+  report_footer  String   @default("أُعدّ بواسطة نظام غيث للسيطرة اللوجستية")
+  doc_footer     String   @default("Prepared using Ghaith Logistics Control System")
+  default_product String?
+  updated_at     DateTime @updatedAt
+}
+
+// ============ سجل التعديلات ============
+model AuditLog {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  transaction_id Int?
+  entity         String?
+  entity_id      Int?
+  action         String
+  old_value      String?
+  new_value      String?
+  created_at     DateTime @default(now())
+
+  user        User         @relation(fields: [user_id], references: [id])
+  transaction Transaction? @relation(fields: [transaction_id], references: [id])
+}
+
+// ============ الكتب المولدة (مع Versioning) ============
+// kind: DRAFT | FINAL | CORRECTION
+model GeneratedDocument {
+  id             Int      @id @default(autoincrement())
+  transaction_id Int
+  template_id    Int?
+  kind           String   @default("DRAFT")
+  label          String // مسودة 1 / نهائي / تصحيح 1
+  word_url       String?
+  pdf_url        String?
+  version        Int
+  generated_by   Int
+  generated_at   DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  template    Template?   @relation(fields: [template_id], references: [id])
+  generator   User        @relation(fields: [generated_by], references: [id])
+}
+
+// ============ سجل الأخطاء (التوثيق والتعلم) ============
+model ErrorRegister {
+  id                Int      @id @default(autoincrement())
+  transaction_id    Int?
+  error_type        String
+  error_description String
+  cause             String?
+  impact            String?
+  prevention_method String?
+  error_date        DateTime @default(now())
+  created_by        Int
+
+  transaction Transaction? @relation(fields: [transaction_id], references: [id])
+  creator     User         @relation(fields: [created_by], references: [id])
+}

@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  src: url("/fonts/NotoNaskhArabic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  src: url("/fonts/NotoNaskhArabic-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Kufi Arabic";
+  src: url("/fonts/NotoKufiArabic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Kufi Arabic";
+  src: url("/fonts/NotoKufiArabic-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --font-body: "Noto Naskh Arabic", "Segoe UI", Tahoma, serif;
+  --font-heading: "Noto Kufi Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+
+html { font-family: var(--font-body); }
+h1, h2, h3, h4, .font-heading, button, th, label, nav { font-family: var(--font-heading); }
+
+body {
+  @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* عناصر نماذج موحدة */
+.input {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
+    focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500
+    disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100;
+}
+.btn, .btn-primary, .btn-secondary, .btn-danger, .btn-success {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold
+    transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-primary { @apply bg-teal-700 text-white hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500; }
+.btn-secondary { @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800; }
+.btn-danger { @apply bg-rose-700 text-white hover:bg-rose-800; }
+.btn-success { @apply bg-emerald-700 text-white hover:bg-emerald-800; }
+
+.card { @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900; }
+.badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+
+table.data { @apply w-full text-sm; }
+table.data th { @apply border-b border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300; }
+table.data td { @apply border-b border-slate-100 px-3 py-2 text-right dark:border-slate-800; }
+table.data tbody tr { @apply hover:bg-slate-50 dark:hover:bg-slate-800/40; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { @apply rounded-full bg-slate-300 dark:bg-slate-700; }
+::-webkit-scrollbar-track { background: transparent; }
