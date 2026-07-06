@@ -9,7 +9,7 @@ export default function TransactionTypesPage() {
     <CatalogManager
       entity="transaction-types"
       title="أنواع المعاملات"
-      description="كل نوع يحدد المتطلبات الإلزامية وقواعد التحقق والمرفقات المتوقعة (تعديل بصلاحية مدير)"
+      description="كل نوع يحدد المتطلبات الإلزامية وقواعد التحقق والمرفقات المتوقعة"
       columns={[
         { key: "code", label: "الكود" },
         { key: "name", label: "النوع" },

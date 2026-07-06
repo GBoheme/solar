@@ -25,7 +25,7 @@ npm run setup
 echo "[3/3] تشغيل التطبيق على http://localhost:3100"
 echo ""
 echo "   افتح المتصفح على:  http://localhost:3100"
-echo "   الدخول: admin@example.com  /  كلمة المرور: 123456"
+echo "   يفتح التطبيق مباشرة بلا تسجيل دخول"
 echo ""
 echo "   (اترك هذه النافذة مفتوحة. لإيقاف التطبيق اضغط Ctrl+C)"
 echo ""

@@ -15,6 +15,7 @@ export default function DriversTab({ tx, canEdit, reload, toast }: TabProps) {
   const [form, setForm] = useState<any>(emptyDriver);
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<any>(null); // { file, replace, report, rejected }
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const drivers = tx.drivers as any[];
@@ -76,22 +77,55 @@ export default function DriversTab({ tx, canEdit, reload, toast }: TabProps) {
     await reload();
   };
 
-  const importFile = async (file: File) => {
+  // الخطوة 1: معاينة الملف (تحليل بلا حفظ)
+  const previewFile = async (file: File) => {
     setImporting(true);
     try {
-      const replace = drivers.length === 0 ? false : confirm("استبدال الجدول الحالي بالملف المستورد؟ (إلغاء = إضافة للجدول الحالي)");
+      const replace = drivers.length === 0 ? false : confirm("استبدال الجدول الحالي بالملف المستورد؟ (إلغاء = إلحاق بالجدول الحالي)");
       const fd = new FormData();
       fd.append("file", file);
       fd.append("replace", replace ? "1" : "0");
-      const d = await apiPost<{ imported: number; issues: string[] }>(`/api/transactions/${tx.id}/drivers/import`, fd);
-      toast(`تم استيراد ${d.imported} صفاً${d.issues.length ? ` — ملاحظات: ${d.issues.slice(0, 3).join("؛ ")}` : ""}`);
+      fd.append("preview", "1");
+      const d = await apiPost<{ report: any; rejected: any[] }>(`/api/transactions/${tx.id}/drivers/import`, fd);
+      setImportPreview({ file, replace, report: d.report, rejected: d.rejected });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "فشل تحليل الملف", "error");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  // الخطوة 2: التأكيد والحفظ الفعلي
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", importPreview.file);
+      fd.append("replace", importPreview.replace ? "1" : "0");
+      const d = await apiPost<{ imported: number; rejected: any[] }>(`/api/transactions/${tx.id}/drivers/import`, fd);
+      toast(`تم استيراد ${d.imported} صفاً${d.rejected.length ? ` — رُفض ${d.rejected.length}` : ""}`);
+      setImportPreview(null);
       await reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : "فشل الاستيراد", "error");
     } finally {
       setImporting(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
+  };
+
+  const downloadRejected = () => {
+    if (!importPreview?.rejected?.length) return;
+    const header = "التسلسل,اسم السائق,رقم السيارة,سبب الرفض\n";
+    const rows = importPreview.rejected
+      .map((r: any) => `${r.sequence_no},"${r.driver_name}","${r.vehicle_number}","${r.reason}"`)
+      .join("\n");
+    const blob = new Blob(["﻿" + header + rows], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "rejected-rows.csv";
+    a.click();
   };
 
   return (
@@ -138,10 +172,10 @@ export default function DriversTab({ tx, canEdit, reload, toast }: TabProps) {
           <>
             <input
               ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-              onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])}
+              onChange={(e) => e.target.files?.[0] && previewFile(e.target.files[0])}
             />
             <button className="btn-secondary" onClick={() => fileRef.current?.click()} disabled={importing}>
-              {importing ? "جارٍ الاستيراد…" : "📥 استيراد Excel"}
+              {importing ? "جارٍ التحليل…" : "📥 استيراد Excel"}
             </button>
             <button className="btn-primary" onClick={openNew}>＋ إضافة سائق</button>
             {drivers.length > 0 && <button className="btn-danger" onClick={clearAll}>تفريغ الجدول</button>}
@@ -182,6 +216,55 @@ export default function DriversTab({ tx, canEdit, reload, toast }: TabProps) {
           </table>
         )}
       </div>
+
+      {/* معاينة الاستيراد قبل الحفظ */}
+      <Modal title="معاينة الاستيراد — لا يحفظ شيء قبل التأكيد" open={!!importPreview} onClose={() => setImportPreview(null)} wide>
+        {importPreview && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {[
+                ["إجمالي الصفوف", importPreview.report.total_rows, ""],
+                ["صالحة للاستيراد", importPreview.report.valid, "text-emerald-600"],
+                ["مرفوضة (نقص بيانات)", importPreview.report.invalid, "text-rose-600"],
+                ["مكررة داخل الملف", importPreview.report.duplicates_in_file, "text-amber-600"],
+                ["مكررة مع الجدول الحالي", importPreview.report.duplicates_with_existing, "text-amber-600"],
+              ].map(([label, val, color], i) => (
+                <div key={i} className="card p-2.5 text-center">
+                  <div className={`text-lg font-bold tabular-nums ${color}`}>{val}</div>
+                  <div className="text-[10px] font-bold text-slate-500">{label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="text-xs text-slate-500">
+              النمط: <b>{importPreview.replace ? "استبدال الجدول الحالي" : "إلحاق بالجدول الحالي (يعاد ترقيم التسلسل تلقائياً)"}</b>
+              {importPreview.report.issues.length > 0 && <div className="mt-1">ملاحظات التحليل: {importPreview.report.issues.slice(0, 3).join("؛ ")}</div>}
+            </div>
+            {importPreview.report.sample.length > 0 && (
+              <div className="max-h-40 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                <table className="data">
+                  <thead><tr><th>ت</th><th>اسم السائق</th><th>رقم السيارة</th><th>المحافظة</th></tr></thead>
+                  <tbody>
+                    {importPreview.report.sample.map((d: any, i: number) => (
+                      <tr key={i}><td>{d.sequence_no}</td><td>{d.driver_name}</td><td>{d.vehicle_number}</td><td>{d.governorate ?? "—"}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {importPreview.rejected.length > 0 && (
+              <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                {importPreview.rejected.length} صفاً سيُرفض — <button className="underline" onClick={downloadRejected}>تنزيل الصفوف المرفوضة CSV</button>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setImportPreview(null)}>إلغاء الاستيراد</button>
+              <button className="btn-primary" onClick={confirmImport} disabled={importing || importPreview.report.valid === 0}>
+                {importing ? "جارٍ الحفظ…" : `تأكيد استيراد ${importPreview.report.valid} صفاً`}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal title={editing ? "تعديل صف سائق" : "إضافة سائق"} open={open} onClose={() => setOpen(false)}>
         <div className="grid gap-3 sm:grid-cols-2">

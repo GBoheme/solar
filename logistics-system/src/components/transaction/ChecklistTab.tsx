@@ -65,7 +65,7 @@ export default function ChecklistTab({ tx, canEdit, role, reload, toast }: TabPr
                   <div className="text-[11px] text-amber-600">{ERROR_LABELS[e.error_type] ?? e.error_type}</div>
                 </div>
                 {role === "ADMIN" && (
-                  <button className="btn-secondary shrink-0 !px-2 !py-1 text-xs" onClick={() => setOverriding(e)}>تجاوز بصلاحية مدير</button>
+                  <button className="btn-secondary shrink-0 !px-2 !py-1 text-xs" onClick={() => setOverriding(e)}>تجاوز مع تسجيل السبب</button>
                 )}
               </div>
             ))}
@@ -73,7 +73,7 @@ export default function ChecklistTab({ tx, canEdit, role, reload, toast }: TabPr
         )}
         {overridden.length > 0 && (
           <div className="mt-3 space-y-1.5">
-            <div className="text-xs font-bold text-slate-500">تحذيرات متجاوزة (بصلاحية مدير):</div>
+            <div className="text-xs font-bold text-slate-500">تحذيرات متجاوزة (مع سبب مسجل):</div>
             {overridden.map((e: any) => (
               <div key={e.id} className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-500 dark:bg-slate-800/60">
                 <s>{e.message}</s> — سبب التجاوز: <b>{e.override_reason}</b>
@@ -130,7 +130,7 @@ export default function ChecklistTab({ tx, canEdit, role, reload, toast }: TabPr
         )}
       </div>
 
-      <Modal title="تجاوز تحذير — بصلاحية مدير" open={!!overriding} onClose={() => setOverriding(null)}>
+      <Modal title="تجاوز تحذير — السبب إلزامي ويسجل في سجل التدقيق" open={!!overriding} onClose={() => setOverriding(null)}>
         {overriding && (
           <div className="space-y-3">
             <Alert kind="warn">{overriding.message}</Alert>

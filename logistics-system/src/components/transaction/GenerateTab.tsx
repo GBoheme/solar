@@ -89,7 +89,7 @@ export default function GenerateTab({ tx, role, reload, toast }: TabProps) {
             </button>
           ) : (
             <div className="text-xs text-slate-400">
-              {errors.length > 0 ? "زر توليد Word يظهر بعد حل الأخطاء الحرجة (شغّل فحص المعاملة)" : "توليد Word غير متاح لهذه الحالة/الصلاحية"}
+              {errors.length > 0 ? "زر توليد Word يظهر بعد حل الأخطاء الحرجة (شغّل فحص المعاملة)" : "توليد Word غير متاح لهذه الحالة"}
             </div>
           )}
           {canIssuePdf && (

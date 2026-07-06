@@ -122,8 +122,11 @@ export function buildBookHtml(payload: BookPayload): string {
   ${attachments}
   <p>${esc(payload.FinalRequest)}</p>
   ${payload.RelatedDepartment ? `<p>نسخة منه إلى / ${esc(payload.RelatedDepartment)}</p>` : ""}
-  <div class="signature">مع التقدير</div>
-  <div class="footer-note">وثيقة مولدة من نظام تدقيق وإدارة معاملات النقل اللوجستي — رقم المعاملة الداخلي: ${esc(payload.InternalNumber)}</div>
+  <div class="signature">
+    مع التقدير<br>
+    <span style="font-size:10.5pt; font-weight:normal">أعدّه ودققه وأصدره: ${esc(payload.PreparedBy)}</span>
+  </div>
+  <div class="footer-note">${esc(payload.FooterText)} — رقم المعاملة الداخلي: ${esc(payload.InternalNumber)}</div>
 </body>
 </html>`;
 }

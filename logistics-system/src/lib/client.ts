@@ -18,9 +18,6 @@ async function request<T = unknown>(url: string, init?: RequestInit): Promise<T>
   } catch { /* استجابات غير JSON */ }
   if (!res.ok) {
     const msg = (data as { error?: string })?.error || `خطأ في الخادم (${res.status})`;
-    if (res.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
-      location.href = "/login";
-    }
     throw new ApiError(res.status, msg);
   }
   return data as T;

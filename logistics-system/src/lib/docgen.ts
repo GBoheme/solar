@@ -40,6 +40,10 @@ export type BookPayload = {
   HasDrivers: boolean;
   HasCutForms: boolean;
   HasAttachments: boolean;
+  // هوية المالك وتذييل الإعدادات
+  PreparedBy: string;
+  FooterText: string;
+  AppName: string;
 };
 
 export async function buildBookPayload(transactionId: number): Promise<BookPayload> {
@@ -59,6 +63,8 @@ export async function buildBookPayload(transactionId: number): Promise<BookPaylo
     },
   });
   if (!tx) throw new Error("المعاملة غير موجودة");
+
+  const settings = await prisma.appSetting.findUnique({ where: { id: 1 } }).catch(() => null);
 
   const drivers = tx.drivers;
   const routes = tx.routes.map((r) => r.route);
@@ -123,6 +129,9 @@ export async function buildBookPayload(transactionId: number): Promise<BookPaylo
     HasDrivers: drivers.length > 0,
     HasCutForms: tx.cut_forms.length > 0,
     HasAttachments: attachmentsWithFiles.length > 0,
+    PreparedBy: settings?.owner_name ?? "Ghaith Boheme",
+    FooterText: settings?.report_footer ?? "أُعدّ بواسطة نظام غيث للسيطرة اللوجستية",
+    AppName: settings?.app_name ?? "نظام غيث للسيطرة اللوجستية",
   };
 }
 

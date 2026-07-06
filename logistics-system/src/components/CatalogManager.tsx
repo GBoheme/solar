@@ -98,7 +98,7 @@ export default function CatalogManager({ entity, title, description, columns, fo
   };
 
   const remove = async (item: any) => {
-    if (!confirm("هل أنت متأكد من حذف هذا السجل؟ الحذف متاح للمدير فقط.")) return;
+    if (!confirm("هل أنت متأكد من حذف هذا السجل نهائياً؟")) return;
     try {
       await apiDelete(`/api/catalog/${entity}/${item.id}`);
       toast("تم الحذف");

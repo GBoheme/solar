@@ -50,9 +50,25 @@ export default function DashboardPage() {
   if (!data) return <Spinner />;
   const s = data.stats;
 
+  const QUICK_ACTIONS = [
+    { href: "/transactions/new", label: "معاملة جديدة", icon: "➕", primary: true },
+    { href: "/transactions", label: "كل المعاملات", icon: "📁" },
+    { href: "/reports", label: "التقارير", icon: "📈" },
+    { href: "/templates", label: "قوالب Word", icon: "📄" },
+    { href: "/settings", label: "الإعدادات والصيانة", icon: "⚙️" },
+  ];
+
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold">لوحة التحكم</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-lg font-bold">لوحة التحكم</h1>
+        <div className="flex-1" />
+        {QUICK_ACTIONS.map((a) => (
+          <Link key={a.href} href={a.href} className={`${a.primary ? "btn-primary" : "btn-secondary"} !px-3 !py-1.5 text-xs`}>
+            {a.icon} {a.label}
+          </Link>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="معاملات مفتوحة" value={s.open} color="text-teal-700 dark:text-teal-400" href="/transactions" />

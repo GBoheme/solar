@@ -86,7 +86,7 @@ export default function AttachmentsTab({ tx, canEdit, role, reload, toast }: Tab
 
       <div className="flex items-center gap-3">
         <div className="text-sm text-slate-500">
-          كل مرفق مذكور في الكتاب يجب أن يكون موجوداً هنا. حذف مرفقات المعاملات النهائية بصلاحية مدير فقط.
+          كل مرفق مذكور في الكتاب يجب أن يكون موجوداً هنا. حذف مرفق من معاملة نهائية يسجل في سجل التدقيق.
         </div>
         <div className="flex-1" />
         {canEdit && <button className="btn-primary" onClick={() => setOpen(true)}>＋ إضافة مرفق</button>}

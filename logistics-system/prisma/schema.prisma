@@ -213,6 +213,10 @@ model Transaction {
   audit_logs          AuditLog[]
   generated_documents GeneratedDocument[]
   error_entries       ErrorRegister[]
+
+  @@index([status])
+  @@index([transaction_type_id])
+  @@index([created_at])
 }
 
 // ربط المعاملة بالمسارات (يمكن أكثر من مسار)
@@ -256,6 +260,9 @@ model CutForm {
   tax_letter     TaxLetter?     @relation(fields: [tax_letter_id], references: [id])
   route          Route?         @relation(fields: [route_id], references: [id])
   operation_logs OperationLog[]
+
+  @@index([form_number])
+  @@index([status])
 }
 
 // ============ السائقون والمركبات ============
@@ -272,6 +279,9 @@ model Driver {
   notes          String?
 
   transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([vehicle_number])
+  @@index([transaction_id, sequence_no])
 }
 
 // ============ سجل الاشتغال والكشف ============
@@ -369,12 +379,28 @@ model ValidationError {
   error_type      String
   message         String
   severity        String   @default("CRITICAL")
+  fingerprint     String? // بصمة دقيقة: نوع الخطأ + الحقل + مرجع الكيان — التجاوز يرتبط بها حصراً
   is_resolved     Boolean  @default(false)
-  override_reason String? // سبب تجاوز التحذير (بصلاحية مدير)
+  override_reason String? // سبب تجاوز التحذير
   overridden_by   Int?
   created_at      DateTime @default(now())
 
   transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([transaction_id, fingerprint])
+}
+
+// ============ إعدادات التطبيق (سجل واحد) ============
+model AppSetting {
+  id             Int      @id @default(1)
+  app_name       String   @default("نظام غيث للسيطرة اللوجستية")
+  app_name_en    String   @default("Ghaith Logistics Control System")
+  owner_name     String   @default("Ghaith Boheme")
+  logo_url       String?
+  report_footer  String   @default("أُعدّ بواسطة نظام غيث للسيطرة اللوجستية")
+  doc_footer     String   @default("Prepared using Ghaith Logistics Control System")
+  default_product String?
+  updated_at     DateTime @updatedAt
 }
 
 // ============ سجل التعديلات ============

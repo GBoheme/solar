@@ -9,6 +9,12 @@ export type ValidationIssue = {
   error_type: string;
   message: string;
   severity: "CRITICAL" | "WARNING";
+  /**
+   * بصمة دقيقة للخطأ: نوع الخطأ + الحقل + مرجع الكيان المحدد
+   * (رقم الاستمارة، رقم السيارة…) — التجاوز يرتبط بها حصراً حتى لا
+   * يخفي تجاوز واحد أخطاء مستقبلية غير مرتبطة به.
+   */
+  fingerprint: string;
 };
 
 export type ValidationResult = {
@@ -49,8 +55,16 @@ export async function validateTransaction(transactionId: number): Promise<Valida
     field_name: string,
     error_type: string,
     message: string,
-    severity: "CRITICAL" | "WARNING" = "CRITICAL"
-  ) => issues.push({ field_name, error_type, message, severity });
+    severity: "CRITICAL" | "WARNING" = "CRITICAL",
+    ref?: string | number
+  ) =>
+    issues.push({
+      field_name,
+      error_type,
+      message,
+      severity,
+      fingerprint: `${error_type}|${field_name}|${ref ?? ""}`,
+    });
 
   const type = tx.transaction_type;
 
@@ -88,9 +102,9 @@ export async function validateTransaction(transactionId: number): Promise<Valida
     add("routes", "ROUTE_MISSING", "المعاملة تحتاج مساراً ولم يتم اختيار أي مسار من دليل المسارات");
   }
   for (const r of routes) {
-    if (!r.is_active) add("routes", "ROUTE_INACTIVE", `المسار (${r.official_description}) غير فعال في الدليل`);
+    if (!r.is_active) add("routes", "ROUTE_INACTIVE", `المسار (${r.official_description}) غير فعال في الدليل`, "CRITICAL", r.code);
     if (tx.product && r.product && r.product !== tx.product) {
-      add("routes", "ROUTE_PRODUCT_MISMATCH", `منتج المسار (${r.product}) لا يطابق منتج المعاملة (${tx.product})`, "WARNING");
+      add("routes", "ROUTE_PRODUCT_MISMATCH", `منتج المسار (${r.product}) لا يطابق منتج المعاملة (${tx.product})`, "WARNING", r.code);
     }
   }
 
@@ -109,14 +123,14 @@ export async function validateTransaction(transactionId: number): Promise<Valida
     }
     for (const [veh, seqs] of seen) {
       if (seqs.length > 1) {
-        add("drivers", "VEHICLE_DUPLICATE", `رقم السيارة (${veh}) مكرر في التسلسلات: ${seqs.join("، ")}`);
+        add("drivers", "VEHICLE_DUPLICATE", `رقم السيارة (${veh}) مكرر في التسلسلات: ${seqs.join("، ")}`, "CRITICAL", veh);
       }
     }
     // تكرار التسلسل
     const seqSet = new Map<number, number>();
     for (const d of drivers) seqSet.set(d.sequence_no, (seqSet.get(d.sequence_no) || 0) + 1);
     for (const [seq, count] of seqSet) {
-      if (count > 1) add("drivers", "SEQUENCE_DUPLICATE", `التسلسل (${seq}) مكرر ${count} مرات في جدول السائقين`);
+      if (count > 1) add("drivers", "SEQUENCE_DUPLICATE", `التسلسل (${seq}) مكرر ${count} مرات في جدول السائقين`, "CRITICAL", seq);
     }
     // التسلسل الناقص
     const seqs = [...seqSet.keys()].sort((a, b) => a - b);
@@ -148,29 +162,29 @@ export async function validateTransaction(transactionId: number): Promise<Valida
   const formNums = new Map<string, number>();
   for (const cf of cutForms) formNums.set(cf.form_number, (formNums.get(cf.form_number) || 0) + 1);
   for (const [num, count] of formNums) {
-    if (count > 1) add("cut_forms", "CUT_FORM_DUPLICATE", `رقم استمارة القطع (${num}) مكرر ${count} مرات في هذه المعاملة`);
+    if (count > 1) add("cut_forms", "CUT_FORM_DUPLICATE", `رقم استمارة القطع (${num}) مكرر ${count} مرات في هذه المعاملة`, "CRITICAL", num);
   }
   for (const cf of cutForms) {
     const label = `استمارة القطع (${cf.form_number})`;
-    if (!cf.form_date) add("cut_forms", "CUT_FORM_NO_DATE", `${label}: التاريخ مفقود`);
+    if (!cf.form_date) add("cut_forms", "CUT_FORM_NO_DATE", `${label}: التاريخ مفقود`, "CRITICAL", cf.form_number);
     if (cf.cut_quantity === null || cf.cut_quantity === undefined) {
-      add("cut_forms", "CUT_FORM_NO_QUANTITY", `${label}: الكمية المقطوعة غير مدخلة`);
+      add("cut_forms", "CUT_FORM_NO_QUANTITY", `${label}: الكمية المقطوعة غير مدخلة`, "CRITICAL", cf.form_number);
     } else {
       const loaded = cf.loaded_quantity ?? 0;
       if (loaded > cf.cut_quantity) {
-        add("cut_forms", "LOADED_GT_CUT", `${label}: الكمية المجهزة (${loaded}) أكبر من الكمية المقطوعة (${cf.cut_quantity})`);
+        add("cut_forms", "LOADED_GT_CUT", `${label}: الكمية المجهزة (${loaded}) أكبر من الكمية المقطوعة (${cf.cut_quantity})`, "CRITICAL", cf.form_number);
       }
       const expectedRemaining = cf.cut_quantity - loaded;
       if (cf.remaining_quantity !== null && cf.remaining_quantity !== undefined && Math.abs(cf.remaining_quantity - expectedRemaining) > 0.001) {
-        add("cut_forms", "REMAINING_MISMATCH", `${label}: الكمية المتبقية المسجلة (${cf.remaining_quantity}) لا تساوي المقطوعة − المجهزة (${expectedRemaining})`);
+        add("cut_forms", "REMAINING_MISMATCH", `${label}: الكمية المتبقية المسجلة (${cf.remaining_quantity}) لا تساوي المقطوعة − المجهزة (${expectedRemaining})`, "CRITICAL", cf.form_number);
       }
       if ((cf.remaining_quantity ?? expectedRemaining) < 0) {
-        add("cut_forms", "REMAINING_NEGATIVE", `${label}: الكمية المتبقية سالبة`);
+        add("cut_forms", "REMAINING_NEGATIVE", `${label}: الكمية المتبقية سالبة`, "CRITICAL", cf.form_number);
       }
     }
-    if (!cf.loading_source_id) add("cut_forms", "CUT_FORM_NO_SOURCE", `${label}: بلا مصدر تجهيز`);
+    if (!cf.loading_source_id) add("cut_forms", "CUT_FORM_NO_SOURCE", `${label}: بلا مصدر تجهيز`, "CRITICAL", cf.form_number);
     if (cf.status === "CLOSED" || cf.status === "EXPIRED") {
-      add("cut_forms", "CUT_FORM_CLOSED", `${label}: الاستمارة ${cf.status === "CLOSED" ? "مغلقة" : "منتهية"} — استخدامها في معاملة جديدة يتطلب تأكيداً`, "WARNING");
+      add("cut_forms", "CUT_FORM_CLOSED", `${label}: الاستمارة ${cf.status === "CLOSED" ? "مغلقة" : "منتهية"} — استخدامها في معاملة جديدة يتطلب تأكيداً`, "WARNING", cf.form_number);
     }
     // استمارة مستخدمة في معاملة أخرى سابقاً
     const usedElsewhere = await prisma.cutForm.findFirst({
@@ -182,7 +196,7 @@ export async function validateTransaction(transactionId: number): Promise<Valida
       include: { transaction: { select: { internal_number: true } } },
     });
     if (usedElsewhere?.transaction) {
-      add("cut_forms", "CUT_FORM_REUSED", `${label}: مستخدمة سابقاً في المعاملة (${usedElsewhere.transaction.internal_number})`, "WARNING");
+      add("cut_forms", "CUT_FORM_REUSED", `${label}: مستخدمة سابقاً في المعاملة (${usedElsewhere.transaction.internal_number})`, "WARNING", cf.form_number);
     }
     // الاستمارة مذكورة لكنها غير مرفقة/موثقة
     const hasFile = !!cf.file_url;
@@ -190,7 +204,7 @@ export async function validateTransaction(transactionId: number): Promise<Valida
       (a) => a.attachment_type === "CUT_FORM" && (a.document_number === cf.form_number || !a.document_number) && a.file_url
     );
     if (!hasFile && !hasAttachment) {
-      add("cut_forms", "CUT_FORM_NOT_ATTACHED", `${label}: مذكورة في المعاملة لكن نسختها غير مرفقة ولا موثقة`);
+      add("cut_forms", "CUT_FORM_NOT_ATTACHED", `${label}: مذكورة في المعاملة لكن نسختها غير مرفقة ولا موثقة`, "CRITICAL", cf.form_number);
     }
     // مطابقة مصدر التجهيز مع المسار
     if (cf.loading_source_id && cf.route_id) {
@@ -264,18 +278,18 @@ export async function validateTransaction(transactionId: number): Promise<Valida
     const found = tx.attachments.find((a) => a.attachment_type === reqType && a.file_url);
     if (!found) {
       const label = (ATTACHMENT_TYPES as Record<string, string>)[reqType] ?? reqType;
-      add("attachments", "REQUIRED_ATTACHMENT_MISSING", `مرفق إلزامي ناقص: ${label}`);
+      add("attachments", "REQUIRED_ATTACHMENT_MISSING", `مرفق إلزامي ناقص: ${label}`, "CRITICAL", reqType);
     }
   }
   for (const a of tx.attachments) {
     if (!a.file_url) {
-      add("attachments", "ATTACHMENT_NO_FILE", `المرفق (${a.title}) مذكور في المعاملة لكن ملفه غير مرفوع`, a.is_required ? "CRITICAL" : "WARNING");
+      add("attachments", "ATTACHMENT_NO_FILE", `المرفق (${a.title}) مذكور في المعاملة لكن ملفه غير مرفوع`, a.is_required ? "CRITICAL" : "WARNING", a.id);
     }
     if (a.file_url && a.is_required && !a.is_verified) {
-      add("attachments", "ATTACHMENT_NOT_VERIFIED", `المرفق الإلزامي (${a.title}) لم يتم تدقيقه بعد`, "WARNING");
+      add("attachments", "ATTACHMENT_NOT_VERIFIED", `المرفق الإلزامي (${a.title}) لم يتم تدقيقه بعد`, "WARNING", a.id);
     }
     if (!a.title.trim()) {
-      add("attachments", "ATTACHMENT_NO_TITLE", "يوجد مرفق بلا وصف أو عنوان", "WARNING");
+      add("attachments", "ATTACHMENT_NO_TITLE", "يوجد مرفق بلا وصف أو عنوان", "WARNING", a.id);
     }
   }
   // جدول سائقين موجود لكن مرفق الجدول غير مرفوع
@@ -290,12 +304,15 @@ export async function validateTransaction(transactionId: number): Promise<Valida
   const existingOverrides = await prisma.validationError.findMany({
     where: { transaction_id: tx.id, override_reason: { not: null } },
   });
-  const overriddenKeys = new Set(existingOverrides.map((o) => `${o.error_type}|${o.field_name}`));
+  // التجاوز يطابق بالبصمة الدقيقة حصراً (توافق خلفي: سجلات قديمة بلا بصمة تطابق بالنوع+الحقل)
+  const overrideKey = (o: { fingerprint: string | null; error_type: string; field_name: string }) =>
+    o.fingerprint ?? `${o.error_type}|${o.field_name}|`;
+  const overriddenKeys = new Set(existingOverrides.map(overrideKey));
   const activeIssues = issues.filter(
-    (i) => !(i.severity === "WARNING" && overriddenKeys.has(`${i.error_type}|${i.field_name}`))
+    (i) => !(i.severity === "WARNING" && overriddenKeys.has(i.fingerprint))
   );
   const overridden = existingOverrides
-    .filter((o) => issues.some((i) => i.error_type === o.error_type && i.field_name === o.field_name))
+    .filter((o) => issues.some((i) => i.fingerprint === overrideKey(o)))
     .map((o) => ({ error_type: o.error_type, field_name: o.field_name, message: o.message, override_reason: o.override_reason! }));
 
   // ---------- حفظ نتائج الفحص ----------
@@ -310,6 +327,7 @@ export async function validateTransaction(transactionId: number): Promise<Valida
         error_type: i.error_type,
         message: i.message,
         severity: i.severity,
+        fingerprint: i.fingerprint,
       })),
     });
   }

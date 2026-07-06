@@ -2,7 +2,6 @@
 // التشغيل: npm run db:seed
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import fs from "fs";
 import path from "path";
 import { buildDefaultTemplate } from "../src/lib/default-template";
@@ -35,14 +34,15 @@ trailer << /Root 1 0 R /Size 6 >>
 async function main() {
   console.log("🌱 بدء زرع البيانات التجريبية…");
 
-  // ============ المستخدمون ============
-  const pass = await bcrypt.hash("123456", 10);
-  const [admin, entry, reviewer] = await Promise.all([
-    prisma.user.upsert({ where: { email: "admin@example.com" }, update: {}, create: { name: "مدير النظام", email: "admin@example.com", password_hash: pass, role: "ADMIN" } }),
-    prisma.user.upsert({ where: { email: "entry@example.com" }, update: {}, create: { name: "موظف إدخال البيانات", email: "entry@example.com", password_hash: pass, role: "DATA_ENTRY" } }),
-    prisma.user.upsert({ where: { email: "reviewer@example.com" }, update: {}, create: { name: "المدقق المسؤول", email: "reviewer@example.com", password_hash: pass, role: "REVIEWER" } }),
-    prisma.user.upsert({ where: { email: "viewer@example.com" }, update: {}, create: { name: "مطالع", email: "viewer@example.com", password_hash: pass, role: "VIEWER" } }),
-  ]);
+  // ============ هوية المالك (نمط المستخدم الواحد — لا تسجيل دخول) ============
+  const owner = await prisma.user.upsert({
+    where: { email: "owner@local" },
+    update: {},
+    create: { name: "Ghaith Boheme", email: "owner@local", password_hash: "-", role: "ADMIN" },
+  });
+
+  // ============ إعدادات التطبيق ============
+  await prisma.appSetting.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
 
   // ============ مصادر التجهيز ============
   const sourceNames = [
@@ -429,7 +429,7 @@ async function main() {
         priority: "HIGH",
         status: "DRAFT",
         notes: "معاملة نموذجية للتجربة — نقل زيت الوقود من مصفى الدورة إلى السماوة",
-        created_by: entry.id,
+        created_by: owner.id,
       },
     });
 
@@ -536,7 +536,7 @@ async function main() {
     }
 
     await prisma.auditLog.create({
-      data: { user_id: entry.id, transaction_id: tx.id, action: "إنشاء معاملة نموذجية (بيانات تجريبية)" },
+      data: { user_id: owner.id, transaction_id: tx.id, action: "إنشاء معاملة نموذجية (بيانات تجريبية)" },
     });
 
     // نموذج في سجل الأخطاء
@@ -548,14 +548,13 @@ async function main() {
         cause: "نسخ بيانات من معاملة قديمة",
         impact: "كان سيصدر الكتاب بعدد خاطئ",
         prevention_method: "اعتماد العد التلقائي من جدول السائقين ومنع الكتابة اليدوية",
-        created_by: reviewer.id,
+        created_by: owner.id,
       },
     });
   }
 
   console.log("✅ تم زرع البيانات التجريبية بنجاح");
-  console.log("   المستخدمون: admin@example.com / entry@example.com / reviewer@example.com / viewer@example.com");
-  console.log("   كلمة المرور للجميع: 123456");
+  console.log("   نمط الاستخدام الشخصي — لا تسجيل دخول، التطبيق يفتح مباشرة على لوحة التحكم");
 }
 
 main()

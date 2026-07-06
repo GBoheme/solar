@@ -74,7 +74,7 @@ export default function TemplatesPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-lg font-bold">قوالب Word</h1>
-          <p className="text-xs text-slate-500">قوالب DOCX رسمية لكل نوع معاملة — تولد الكتب منها تلقائياً (رفع القوالب بصلاحية مدير)</p>
+          <p className="text-xs text-slate-500">قوالب DOCX رسمية لكل نوع معاملة — تولد الكتب منها تلقائياً</p>
         </div>
         <div className="flex-1" />
         <button className="btn-primary" onClick={() => setOpen(true)}>＋ رفع قالب</button>
