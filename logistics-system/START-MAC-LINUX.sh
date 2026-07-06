@@ -19,10 +19,8 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 
-if [ ! -f prisma/dev.db ]; then
-  echo "[2/3] إنشاء قاعدة البيانات والبيانات التجريبية..."
-  npm run setup
-fi
+echo "[2/3] تهيئة قاعدة البيانات والبيانات التجريبية..."
+npm run setup
 
 echo "[3/3] تشغيل التطبيق على http://localhost:3100"
 echo ""

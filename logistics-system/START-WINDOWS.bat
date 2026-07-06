@@ -22,10 +22,14 @@ if not exist node_modules (
   if errorlevel 1 ( echo فشل التثبيت & pause & exit /b 1 )
 )
 
-if not exist prisma\dev.db (
-  echo [2/3] إنشاء قاعدة البيانات والبيانات التجريبية...
-  call npm run setup
-  if errorlevel 1 ( echo فشل الإعداد & pause & exit /b 1 )
+echo [2/3] تهيئة قاعدة البيانات والبيانات التجريبية...
+call npm run setup
+if errorlevel 1 (
+  echo.
+  echo [خطأ] فشلت تهيئة قاعدة البيانات. تأكد من الاتصال بالإنترنت عند أول تشغيل
+  echo        ^(لتنزيل محرك Prisma^) ثم أعد المحاولة.
+  pause
+  exit /b 1
 )
 
 echo [3/3] تشغيل التطبيق على http://localhost:3100
